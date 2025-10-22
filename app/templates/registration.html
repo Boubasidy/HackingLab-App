@@ -1,0 +1,198 @@
+{% extends "base.html" %} {% block title %}Inscription{% endblock %} {% block
+content %}
+<div class="container py-5">
+  <div class="row justify-content-center">
+    <div class="col-md-6 col-lg-5">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <h4 class="card-title mb-3 text-center">Créer un compte</h4>
+
+          {# Messages flash #} {% with messages =
+          get_flashed_messages(with_categories=true) %} {% if messages %} {% for
+          category, message in messages %}
+          <div
+            class="alert alert-{{ category }} alert-dismissible fade show"
+            role="alert"
+          >
+            {{ message }}
+            <button
+              type="button"
+              class="btn-close"
+              data-bs-dismiss="alert"
+              aria-label="Close"
+            ></button>
+          </div>
+          {% endfor %} {% endif %} {% endwith %}
+
+          <form method="post" action="{{ url_for('auth.register') }}">
+            {% if form %} {{ form.hidden_tag() }}
+
+            <div class="mb-3">
+              {{ form.username.label(class="form-label") }} {{
+              form.username(class="form-control", placeholder="Nom
+              d'utilisateur") }} {% if form.username.errors %}
+              <div class="form-text text-danger">
+                {{ form.username.errors[0] }}
+              </div>
+              {% endif %}
+            </div>
+
+            <div class="mb-3">
+              {{ form.email.label(class="form-label") }} {{
+              form.email(class="form-control", placeholder="Adresse e-mail") }}
+              {% if form.email.errors %}
+              <div class="form-text text-danger">
+                {{ form.email.errors[0] }}
+              </div>
+              {% endif %}
+            </div>
+
+            <div class="mb-3">
+              {{ form.password.label(class="form-label") }} {{
+              form.password(class="form-control", placeholder="Mot de passe") }}
+              {% if form.password.errors %}
+              <div class="form-text text-danger">
+                {{ form.password.errors[0] }}
+              </div>
+              {% endif %}
+            </div>
+
+            <div class="mb-3">
+              {{ form.confirm.label(class="form-label") }} {{
+              form.confirm(class="form-control", placeholder="Confirmer le mot
+              de passe") }} {% if form.confirm.errors %}
+              <div class="form-text text-danger">
+                {{ form.confirm.errors[0] }}
+              </div>
+              {% endif %}
+            </div>
+
+            <!-- 🌐 Champs spécifiques au projet -->
+            <div class="mb-3">
+              {{ form.role.label(class="form-label") }} {{
+              form.role(class="form-select") }} {% if form.role.errors %}
+              <div class="form-text text-danger">{{ form.role.errors[0] }}</div>
+              {% endif %}
+            </div>
+
+            <div class="mb-3">
+              {{ form.requested_containers.label(class="form-label") }} {{
+              form.requested_containers(class="form-control",
+              placeholder="Nombre de conteneurs souhaités (1-50)") }} {% if
+              form.requested_containers.errors %}
+              <div class="form-text text-danger">
+                {{ form.requested_containers.errors[0] }}
+              </div>
+              {% endif %}
+            </div>
+
+            <div class="mb-3">
+              {{ form.duration.label(class="form-label") }} {{
+              form.duration(class="form-control", placeholder="Durée
+              d'utilisation (en heures, max 168)") }} {% if form.duration.errors
+              %}
+              <div class="form-text text-danger">
+                {{ form.duration.errors[0] }}
+              </div>
+              {% endif %}
+            </div>
+            <!-- Fin des nouveaux champs -->
+
+            <div class="d-grid">{{ form.submit(class="btn btn-primary") }}</div>
+
+            {% else %} {# Fallback HTML pur (si Flask-WTF non utilisé) #} {% if
+            csrf_token %}
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+            {% endif %}
+
+            <div class="mb-3">
+              <label for="username" class="form-label">Nom d'utilisateur</label>
+              <input
+                id="username"
+                name="username"
+                class="form-control"
+                required
+                autofocus
+              />
+            </div>
+
+            <div class="mb-3">
+              <label for="email" class="form-label">Adresse e-mail</label>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                class="form-control"
+                required
+              />
+            </div>
+
+            <div class="mb-3">
+              <label for="password" class="form-label">Mot de passe</label>
+              <input
+                id="password"
+                name="password"
+                type="password"
+                class="form-control"
+                required
+              />
+            </div>
+
+            <div class="mb-3">
+              <label for="confirm" class="form-label"
+                >Confirmer le mot de passe</label
+              >
+              <input
+                id="confirm"
+                name="confirm"
+                type="password"
+                class="form-control"
+                required
+              />
+            </div>
+
+            <div class="mb-3">
+              <label for="requested_containers" class="form-label"
+                >Nombre de conteneurs</label
+              >
+              <input
+                id="requested_containers"
+                name="requested_containers"
+                type="number"
+                min="1"
+                max="50"
+                class="form-control"
+                required
+              />
+            </div>
+
+            <div class="mb-3">
+              <label for="duration" class="form-label">Durée (en heures)</label>
+              <input
+                id="duration"
+                name="duration"
+                type="number"
+                min="1"
+                max="168"
+                class="form-control"
+                required
+              />
+            </div>
+
+            <div class="d-grid">
+              <button type="submit" class="btn btn-primary">S'inscrire</button>
+            </div>
+            {% endif %}
+          </form>
+
+          <hr class="my-3" />
+          <p class="text-center mb-0">
+            Déjà un compte ?
+            <a href="{{ url_for('auth.login') }}">Se connecter</a>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

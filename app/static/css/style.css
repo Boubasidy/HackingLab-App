@@ -1,0 +1,45 @@
+/* Police type "terminal" pour un style hacker */
+@import url("https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700&display=swap");
+
+:root {
+  --cyber-green: #00ff80;
+  --cyber-bg: #0a0412;
+  --cyber-text: #e0e0e0;
+}
+
+/* Fond style "cyber" */
+.cyber-bg {
+  font-family: "Share Tech Mono", monospace;
+  background-color: var(--cyber-bg);
+  color: var(--cyber-text);
+  min-height: 100vh;
+}
+
+/* Style de la navbar */
+.cyber-navbar {
+  background-color: #1a1a3a;
+  border-bottom: 1px solid var(--cyber-green);
+}
+
+/* Style des liens de la navbar */
+.nav-link {
+  color: var(--cyber-text) !important;
+}
+
+.nav-link:hover {
+  color: var(--cyber-green) !important;
+}
+
+/* Style du contenu principal */
+.container {
+  background-color: rgba(20, 10, 40, 0.8);
+  border: 1px solid var(--cyber-green);
+  padding: 2rem;
+  border-radius: 5px;
+}
+
+/* Style des titres */
+h1 {
+  font-family: "Orbitron", sans-serif;
+  color: var(--cyber-green);
+}
