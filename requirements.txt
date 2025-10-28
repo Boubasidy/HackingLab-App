@@ -4,5 +4,6 @@ Flask-WTF==1.0.1
 Flask-Login==0.6.3
 Flask-Bcrypt==1.0.1
 Werkzeug==2.2.3
-pytest==6.2.5
+SQLAlchemy==1.4.49
 email-validator==1.2.1
+pytest==6.2.5

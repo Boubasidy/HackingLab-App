@@ -77,3 +77,4 @@ def reset_password():
         flash("Email non trouvé.", "danger")
 
     return render_template('reset_password.html', form=form)
+
