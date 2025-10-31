@@ -10,19 +10,29 @@
     restart_policy: always
     detach: true
   loop: "{{ range(1, (nb_env | int) + 1) | list }}"
-
   register: containers
 
-# Nouvelle étape : extraire et enregistrer les infos utiles
+# Récupérer les infos utiles : nom, IP, port exposé
 - name: Extraire les infos utiles des conteneurs créés
+  set_fact:
+    docker_infos: "{{ docker_infos | default([]) + [ {
+        'name': item.container.Name,
+        'ip_address': item.container.NetworkSettings.Networks.bridge.IPAddress,
+        'ssh_port': docker_base_port + (item.container.Name | regex_replace('^env_', '') | int)
+      } ] }}"
+  loop: "{{ containers.results }}"
+
+
+
+# Ajout d’un mot de passe SSH fixe pour les tests
+# (dans un vrai environnement, on génèrera ou échangera des clés SSH)
+- name: Ajouter mot de passe SSH aux infos
   set_fact:
     docker_infos: >-
       {{
-        containers.results
-        | map(attribute='container')
-        | map(attribute='Name')
-        | list
+        docker_infos | map('combine', {'username': 'root', 'password': 'vagrant'}) | list
       }}
+
 
 - name: Sauvegarder les infos d'accès dans un JSON
   copy:

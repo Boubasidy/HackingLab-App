@@ -1,5 +1,23 @@
 [
-    "/env_1",
-    "/env_2",
-    "/env_3"
+    {
+        "ip_address": "172.17.0.3",
+        "name": "/env_1",
+        "password": "vagrant",
+        "ssh_port": 22000,
+        "username": "root"
+    },
+    {
+        "ip_address": "172.17.0.2",
+        "name": "/env_2",
+        "password": "vagrant",
+        "ssh_port": 22000,
+        "username": "root"
+    },
+    {
+        "ip_address": "172.17.0.4",
+        "name": "/env_3",
+        "password": "vagrant",
+        "ssh_port": 22000,
+        "username": "root"
+    }
 ]
