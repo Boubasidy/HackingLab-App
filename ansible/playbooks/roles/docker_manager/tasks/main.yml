@@ -1,0 +1,31 @@
+---
+# tasks/main.yml
+
+- name: Créer plusieurs conteneurs Docker
+  community.docker.docker_container:
+    name: "env_{{ item }}"
+    image: "{{ docker_env_image }}"
+    published_ports:
+      - "{{ docker_base_port + item }}:22"
+    restart_policy: always
+    detach: true
+  loop: "{{ range(1, (nb_env | int) + 1) | list }}"
+
+  register: containers
+
+# Nouvelle étape : extraire et enregistrer les infos utiles
+- name: Extraire les infos utiles des conteneurs créés
+  set_fact:
+    docker_infos: >-
+      {{
+        containers.results
+        | map(attribute='container')
+        | map(attribute='Name')
+        | list
+      }}
+
+- name: Sauvegarder les infos d'accès dans un JSON
+  copy:
+    dest: "{{ json_output_path }}"
+    content: "{{ docker_infos | to_nice_json }}"
+

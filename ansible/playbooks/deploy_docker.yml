@@ -1,0 +1,16 @@
+---
+- name: Gestion du pool docker par Ansible
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  become: yes
+
+  vars:
+    nb_env: 2
+    docker_env_image: youri/secure-ssh:latest
+    docker_base_port: 22000
+    json_output_path: /srv/infrastructure/ansible/environnements.json
+
+  roles:
+    - docker_manager
+
