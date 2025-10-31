@@ -17,6 +17,7 @@ def mes_ressources():
     PAS d'ansible-playbook ici, on lit juste la sortie.
     """
     json_path = "/srv/infrastructure/ansible/environnements.json"
+    debug_info = {"exists": os.path.exists(json_path)}
 
     if not os.path.exists(json_path):
         flash("Fichier d'environnements non trouvé (lance le playbook Ansible)", "warning")
@@ -32,4 +33,7 @@ def mes_ressources():
     # ici data peut être :
     #  - soit une liste de strings : ["/env_1", "/env_2", ...]
     #  - soit une liste d'objets plus riches
+    print("📄 DATA LU :", data)
+    print("DEBUG INFO:", debug_info)
+
     return render_template("my_resources.html", data=data)
