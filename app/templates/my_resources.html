@@ -2,22 +2,30 @@
 
 {% block content %}
 <div class="container mt-4">
-
-  <h2>Résultat du Playbook</h2>
+  <h2>Mes environnements Docker</h2>
 
   {% if data %}
-    <pre id="json-output">{{ data | tojson(indent=2) }}</pre>
-  {% elif raw %}
-    <h4>Sortie brute :</h4>
-    <pre>{{ raw }}</pre>
+    {% if data is string %}
+      <pre>{{ data }}</pre>
+    {% else %}
+      {# si c'est une liste #}
+      {% if data|length > 0 and data[0] is string %}
+        <ul>
+          {% for item in data %}
+            <li>{{ item }}</li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <pre>{{ data | tojson(indent=2) }}</pre>
+      {% endif %}
+    {% endif %}
   {% else %}
     <p>Aucune donnée à afficher.</p>
   {% endif %}
 
-  {% if stderr %}
-    <h4 class="text-danger mt-3">Erreurs :</h4>
-    <pre>{{ stderr }}</pre>
+  {% if raw %}
+    <h4>Contenu brut :</h4>
+    <pre>{{ raw }}</pre>
   {% endif %}
-
 </div>
 {% endblock %}
