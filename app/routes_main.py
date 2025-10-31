@@ -22,7 +22,6 @@ def about():
 @main.route('/mes-ressources')
 @login_required
 def my_resources():
-    # Exécute le playbook Ansible
     result = subprocess.run([
         "ansible-playbook",
         "-i", "inventories/hosts.ini",
@@ -32,23 +31,8 @@ def my_resources():
     ], capture_output=True, text=True)
 
     try:
-        # Parse la sortie JSON
         data = json.loads(result.stdout)
-        
-        # Formate les données pour le template
-        instances = []
-        for container in data.get('docker_containers', []):
-            instances.append({
-                'name': container.get('name', 'N/A'),
-                'ip_address': container.get('ip_address'),
-                'username': 'admin',  # ou dynamique selon votre config
-                'password': container.get('password', '********'),
-                'status': 'active' if container.get('state') == 'running' else 'inactive',
-                'created_at': datetime.strptime(container.get('created', ''), '%Y-%m-%dT%H:%M:%SZ')
-                if container.get('created') else None
-            })
     except json.JSONDecodeError:
-        flash('Erreur lors de la récupération des ressources', 'danger')
-        instances = []
+        return jsonify({"error": "Erreur lors du parsing JSON", "raw": result.stdout}), 500
 
-    return render_template('my_resources.html', instances=instances)
+    return jsonify(data)
