@@ -1,141 +1,23 @@
-{% extends "base.html" %} {% block title %}Mes ressources{% endblock %} {% block
-content %}
-<div class="container">
-  <h2 class="mb-4">Mes conteneurs</h2>
+{% extends "base.html" %}
 
-  {% if instances %}
-  <div class="table-responsive">
-    <table class="table table-striped table-hover align-middle">
-      <thead class="table-dark">
-        <tr>
-          <th>Nom</th>
-          <th>IP</th>
-          <th>Login</th>
-          <th>Mot de passe</th>
-          <th>Statut</th>
-          <th>Créé le</th>
-          <th class="text-end">Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for inst in instances %}
-        <tr>
-          <td>{{ inst.name }}</td>
-          <td>
-            {% if inst.ip_address %}
-            <a href="http://{{ inst.ip_address }}" target="_blank"
-              >{{ inst.ip_address }}</a
-            >
-            {% else %}
-            <span class="text-muted">Non attribuée</span>
-            {% endif %}
-          </td>
-          <td>{{ inst.username }}</td>
+{% block content %}
+<div class="container mt-4">
 
-          <!-- Mot de passe masqué par défaut -->
-          <td>
-            <div class="input-group input-group-sm">
-              <input
-                type="password"
-                class="form-control form-control-sm password-field"
-                value="{{ inst.password }}"
-                readonly
-              />
-              <button
-                class="btn btn-outline-secondary btn-sm reveal-btn"
-                type="button"
-                title="Afficher/masquer"
-              >
-                <i class="fa fa-eye"></i>
-              </button>
-              <button
-                class="btn btn-outline-secondary btn-sm copy-btn"
-                type="button"
-                title="Copier"
-              >
-                <i class="fa fa-copy"></i>
-              </button>
-            </div>
-          </td>
+  <h2>Résultat du Playbook</h2>
 
-          <td>
-            {% if inst.status == 'active' %}
-            <span class="badge bg-success">Active</span>
-            {% elif inst.status == 'expired' %}
-            <span class="badge bg-secondary">Expiré</span>
-            {% else %}
-            <span class="badge bg-warning text-dark">{{ inst.status }}</span>
-            {% endif %}
-          </td>
-
-          <td>
-            {{ inst.created_at.strftime('%Y-%m-%d %H:%M') if inst.created_at
-            else '-' }}
-          </td>
-
-          <td class="text-end">
-            <!-- Exemples d'actions : ssh (si IP et port), détails -->
-            {% if inst.ip_address %}
-            <a
-              href="ssh://{{ inst.username }}@{{ inst.ip_address }}"
-              class="btn btn-sm btn-outline-primary me-1"
-              title="Se connecter (SSH)"
-            >
-              <i class="fa fa-terminal"></i>
-            </a>
-            {% endif %}
-            <a href="#" class="btn btn-sm btn-outline-info" title="Détails">
-              <i class="fa fa-info-circle"></i>
-            </a>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+  {% if data %}
+    <pre id="json-output">{{ data | tojson(indent=2) }}</pre>
+  {% elif raw %}
+    <h4>Sortie brute :</h4>
+    <pre>{{ raw }}</pre>
   {% else %}
-  <div class="alert alert-info">
-    Vous n'avez pas encore de conteneurs provisionnés.
-  </div>
+    <p>Aucune donnée à afficher.</p>
   {% endif %}
+
+  {% if stderr %}
+    <h4 class="text-danger mt-3">Erreurs :</h4>
+    <pre>{{ stderr }}</pre>
+  {% endif %}
+
 </div>
-{% endblock %} {% block scripts %} {{ super() }}
-<script>
-  document.addEventListener("click", function (e) {
-    // Afficher / masquer mot de passe
-    if (e.target.closest(".reveal-btn")) {
-      const btn = e.target.closest(".reveal-btn");
-      const group = btn.closest(".input-group");
-      const input = group.querySelector(".password-field");
-      if (input.type === "password") {
-        input.type = "text";
-        btn.innerHTML = '<i class="fa fa-eye-slash"></i>';
-      } else {
-        input.type = "password";
-        btn.innerHTML = '<i class="fa fa-eye"></i>';
-      }
-    }
-
-    // Copier mot de passe dans le presse-papier
-    if (e.target.closest(".copy-btn")) {
-      const btn = e.target.closest(".copy-btn");
-      const group = btn.closest(".input-group");
-      const input = group.querySelector(".password-field");
-
-      // temporairement rendre visible afin de copier si besoin
-      const prevType = input.type;
-      input.type = "text";
-      input.select ? input.select() : console.warn("select non supporté");
-      try {
-        document.execCommand("copy");
-        btn.innerHTML = '<i class="fa fa-check"></i>';
-        setTimeout(() => (btn.innerHTML = '<i class="fa fa-copy"></i>'), 1200);
-      } catch (err) {
-        console.error("Erreur copie", err);
-      }
-      input.type = prevType;
-      window.getSelection().removeAllRanges();
-    }
-  });
-</script>
 {% endblock %}
