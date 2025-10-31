@@ -48,7 +48,7 @@ def login():
 
             return redirect(next_page)
 
-        flash("Email ou mot de passe invalide.", "danger")
+        flash("Email ou mot de passe invalideeeeeetest.", "danger")
 
     return render_template('authentification.html', form=form)
 
