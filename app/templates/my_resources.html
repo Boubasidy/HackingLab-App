@@ -2,30 +2,39 @@
 
 {% block content %}
 <div class="container mt-4">
-  <h2>Mes environnements Docker</h2>
+  <h2 class="mb-4">Mes environnements Docker</h2>
 
   {% if data %}
-    {% if data is string %}
-      <pre>{{ data }}</pre>
-    {% else %}
-      {# si c'est une liste #}
-      {% if data|length > 0 and data[0] is string %}
-        <ul>
-          {% for item in data %}
-            <li>{{ item }}</li>
+    {% if data|length > 0 and data[0] is mapping %}
+      <table class="table table-striped table-bordered align-middle">
+        <thead class="table-dark">
+          <tr>
+            <th>Nom</th>
+            <th>Adresse IP</th>
+            <th>Port SSH</th>
+            <th>Utilisateur</th>
+            <th>Mot de passe</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for env in data %}
+          <tr>
+            <td>{{ env.name }}</td>
+            <td>{{ env.ip_address }}</td>
+            <td>{{ env.ssh_port }}</td>
+            <td>{{ env.username }}</td>
+            <td>{{ env.password }}</td>
+          </tr>
           {% endfor %}
-        </ul>
-      {% else %}
-        <pre>{{ data | tojson(indent=2) }}</pre>
-      {% endif %}
+        </tbody>
+      </table>
+    {% else %}
+      <pre>{{ data | tojson(indent=2) }}</pre>
     {% endif %}
   {% else %}
-    <p>Aucune donnée à afficher.</p>
-  {% endif %}
-
-  {% if raw %}
-    <h4>Contenu brut :</h4>
-    <pre>{{ raw }}</pre>
+    <div class="alert alert-warning">
+      Aucune donnée à afficher. Lance le playbook Ansible pour générer les environnements.
+    </div>
   {% endif %}
 </div>
 {% endblock %}
