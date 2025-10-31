@@ -1,38 +1,66 @@
 from datetime import datetime
 import subprocess
-import os 
+import os
 import json
-import platform
-from unittest import result
-from flask import Blueprint, flash, render_template
-from flask_login import login_required, current_user
-from app.models import ResourceInstance, ResourceRequest  # assure-toi que ces modèles existent
+from flask import Blueprint, flash, render_template, current_app
+from flask_login import login_required
 
-# Blueprint pour les pages principales
+# Blueprint principal
 main = Blueprint('main', __name__)
 
 @main.route('/')
 def home():
-    return render_template('base.html')  # plutôt que base.html, sinon le contenu principal est vide
+    return render_template('base.html')
 
 @main.route('/about')
 def about():
     return render_template('about.html')
 
+
 @main.route('/mes-ressources')
 @login_required
-def my_resources():
-    result = subprocess.run([
-        "ansible-playbook",
-        "-i", "inventories/hosts.ini",
-        "playbooks/deploy_docker.yml",
-        "-e", "number=3",
-        "--extra-vars", "output=json"
-    ], capture_output=True, text=True)
+def mes_ressources():
+    """
+    Exécute le playbook Ansible en local et affiche le JSON de sortie sur la page.
+    """
 
+    # --- chemins absolus ---
+    ansible_root = "/srv/infrastructure/ansible"
+    inventory_path = os.path.join(ansible_root, "inventories", "hosts.ini")
+    playbook_path = os.path.join(ansible_root, "playbooks", "test.yml")  # ton playbook réel
+
+    # --- commande ansible ---
+    cmd = [
+        "ansible-playbook",
+        "-i", inventory_path,
+        playbook_path,
+        "--extra-vars", "output=json number=3"
+    ]
+
+    # --- exécution ---
+    result = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        cwd=ansible_root
+    )
+
+    # --- gestion des erreurs d'exécution ---
+    if result.returncode != 0:
+        current_app.logger.error("Ansible stderr:\n%s", result.stderr)
+        current_app.logger.error("Ansible stdout:\n%s", result.stdout)
+        flash("Erreur lors de l'exécution du playbook Ansible", "danger")
+        return render_template("my_resources.html", data={}, stderr=result.stderr)
+
+    # --- tentative de parsing JSON ---
     try:
         data = json.loads(result.stdout)
     except json.JSONDecodeError:
-        return jsonify({"error": "Erreur lors du parsing JSON", "raw": result.stdout}), 500
+        # si pas du JSON, on renvoie le texte brut pour inspection
+        flash("Sortie Ansible non au format JSON", "warning")
+        current_app.logger.warning("Sortie non JSON :\n%s", result.stdout)
+        return render_template("my_resources.html", data={}, raw=result.stdout)
 
-    return jsonify(data)
+    # --- succès ---
+    flash("Playbook exécuté avec succès", "success")
+    return render_template("my_resources.html", data=data)
