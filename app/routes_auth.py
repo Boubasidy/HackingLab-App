@@ -1,9 +1,9 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_user, logout_user, login_required, current_user
 from urllib.parse import urlparse
-from app.forms import RegistrationForm, LoginForm, ResetPasswordForm
-from app.models import User
-from app import db, bcrypt
+from . forms import RegistrationForm, LoginForm, ResetPasswordForm
+from . models import User
+from . import db, bcrypt
 
 
 # Blueprint pour l'authentification
