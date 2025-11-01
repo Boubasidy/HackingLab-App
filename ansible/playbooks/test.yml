@@ -1,0 +1,13 @@
+---
+- name: Test Ansible local
+  hosts: local
+  become: yes
+
+  tasks:
+    - name: Vérifier la version de Docker
+      command: docker --version
+      register: docker_version
+
+    - debug:
+        var: docker_version.stdout
+
