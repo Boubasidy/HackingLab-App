@@ -22,18 +22,15 @@ def about():
 @main.route('/mes_ressources')
 @login_required
 def mes_ressources():
-    import os, json
+    import json
     from datetime import datetime
     from flask import flash, render_template
 
-    # Chemin absolu vers le fichier JSON
-    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-    json_path = os.path.join(base_dir, 'infrastructure', 'ansible', 'environnements.json')
+    json_path = "/srv/infrastructure/ansible/environnements.json"
 
     instances = []
 
     try:
-        # Lire le JSON existant
         with open(json_path, 'r') as f:
             data = json.load(f)
 
@@ -48,15 +45,11 @@ def mes_ressources():
                 'created_at': datetime.now()
             })
 
-        if not instances:
-            flash("Aucun conteneur provisionné pour l'instant.", "info")
-
     except FileNotFoundError:
-        flash("Le fichier 'environnements.json' n'existe pas. Exécutez d'abord le playbook.", "warning")
+        flash(f"Le fichier '{json_path}' n'existe pas. Exécute d'abord le playbook.", "warning")
     except json.JSONDecodeError:
         flash("Erreur lors de la lecture du fichier JSON.", "danger")
     except Exception as e:
         flash(f"Erreur inattendue : {e}", "danger")
 
     return render_template('my_resources.html', instances=instances)
- 
