@@ -25,14 +25,14 @@ def create_app():
     login_manager.login_view = 'auth.login'
     login_manager.login_message_category = 'info'
 
-    from app.models import User, Post, ResourceRequest, ResourceInstance
+    from .models import User, Post, ResourceRequest, ResourceInstance
 
     @login_manager.user_loader
     def load_user(user_id):
         return User.query.get(int(user_id))
 
-    from app.routes_auth import auth
-    from app.routes_main import main
+    from   .routes_auth import auth
+    from   .routes_main import main
     app.register_blueprint(auth)
     app.register_blueprint(main)
 

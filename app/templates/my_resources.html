@@ -31,8 +31,6 @@ content %}
             {% endif %}
           </td>
           <td>{{ inst.username }}</td>
-
-          <!-- Mot de passe masqué par défaut -->
           <td>
             <div class="input-group input-group-sm">
               <input
@@ -57,27 +55,18 @@ content %}
               </button>
             </div>
           </td>
-
           <td>
             {% if inst.status == 'active' %}
             <span class="badge bg-success">Active</span>
-            {% elif inst.status == 'expired' %}
-            <span class="badge bg-secondary">Expiré</span>
             {% else %}
             <span class="badge bg-warning text-dark">{{ inst.status }}</span>
             {% endif %}
           </td>
-
-          <td>
-            {{ inst.created_at.strftime('%Y-%m-%d %H:%M') if inst.created_at
-            else '-' }}
-          </td>
-
+          <td>{{ inst.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
           <td class="text-end">
-            <!-- Exemples d'actions : ssh (si IP et port), détails -->
             {% if inst.ip_address %}
             <a
-              href="ssh://{{ inst.username }}@{{ inst.ip_address }}"
+              href="ssh://{{ inst.username }}@{{ inst.ip_address }}:{{ inst.ssh_port }}"
               class="btn btn-sm btn-outline-primary me-1"
               title="Se connecter (SSH)"
             >
@@ -102,36 +91,32 @@ content %}
 {% endblock %} {% block scripts %} {{ super() }}
 <script>
   document.addEventListener("click", function (e) {
-    // Afficher / masquer mot de passe
     if (e.target.closest(".reveal-btn")) {
       const btn = e.target.closest(".reveal-btn");
-      const group = btn.closest(".input-group");
-      const input = group.querySelector(".password-field");
-      if (input.type === "password") {
-        input.type = "text";
-        btn.innerHTML = '<i class="fa fa-eye-slash"></i>';
-      } else {
-        input.type = "password";
-        btn.innerHTML = '<i class="fa fa-eye"></i>';
-      }
+      const input = btn
+        .closest(".input-group")
+        .querySelector(".password-field");
+      input.type = input.type === "password" ? "text" : "password";
+      btn.innerHTML =
+        input.type === "password"
+          ? '<i class="fa fa-eye"></i>'
+          : '<i class="fa fa-eye-slash"></i>';
     }
 
-    // Copier mot de passe dans le presse-papier
     if (e.target.closest(".copy-btn")) {
       const btn = e.target.closest(".copy-btn");
-      const group = btn.closest(".input-group");
-      const input = group.querySelector(".password-field");
-
-      // temporairement rendre visible afin de copier si besoin
+      const input = btn
+        .closest(".input-group")
+        .querySelector(".password-field");
       const prevType = input.type;
       input.type = "text";
-      input.select ? input.select() : console.warn("select non supporté");
+      input.select();
       try {
         document.execCommand("copy");
         btn.innerHTML = '<i class="fa fa-check"></i>';
         setTimeout(() => (btn.innerHTML = '<i class="fa fa-copy"></i>'), 1200);
       } catch (err) {
-        console.error("Erreur copie", err);
+        console.error(err);
       }
       input.type = prevType;
       window.getSelection().removeAllRanges();

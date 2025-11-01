@@ -31,7 +31,7 @@ def register():
 @auth.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
-        return redirect(url_for('main.my_resources'))
+        return redirect(url_for('main.mes_ressources'))
 
     form = LoginForm()
     if form.validate_on_submit():
@@ -44,7 +44,7 @@ def login():
             # Gestion du paramètre 'next'
             next_page = request.args.get('next')
             if not next_page or urlparse(next_page).netloc != '':
-                next_page = url_for('main.my_resources')
+                next_page = url_for('main.mes_ressources')
 
             return redirect(next_page)
 

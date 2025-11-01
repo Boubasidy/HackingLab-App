@@ -19,36 +19,45 @@ def home():
 def about():
     return render_template('about.html')
 
-@main.route('/mes-ressources')
+@main.route('/mes_ressources')
 @login_required
 def my_resources():
-    # Exécute le playbook Ansible
+    # Chemins
+    path_base = os.getcwd()
+    base = os.path.dirname(path_base)
+    ini_dir = os.path.join(base, 'infrastructure', 'ansible')
+    ini_path = os.path.join(ini_dir, 'inventories', 'hosts.ini')
+    playbook_path = os.path.join(ini_dir, 'playbooks', 'deploy_docker.yml')
+    json_output_path = os.path.join(ini_dir , "environnements.json")
+
+    # Exécution du playbook avec output JSON
     result = subprocess.run([
-        "ansible-playbook",
-        "-i", "inventories/hosts.ini",
-        "playbooks/deploy_docker.yml",
-        "-e", "number=3",
-        "--extra-vars", "output=json"
-    ], capture_output=True, text=True)
+    "ansible-playbook",
+    "-i", ini_path,
+    playbook_path,
+    "-e", "output=json"
+   ], capture_output=True, text=True)
+
+    instances = []
 
     try:
-        # Parse la sortie JSON
+        # La sortie stdout contient du JSON
         data = json.loads(result.stdout)
-        
-        # Formate les données pour le template
-        instances = []
-        for container in data.get('docker_containers', []):
+
+        # Parcours des conteneurs
+        for container in data:
             instances.append({
-                'name': container.get('name', 'N/A'),
+                'name': container.get('name', 'N/A').lstrip('/'),  # supprime le / devant env_1
                 'ip_address': container.get('ip_address'),
-                'username': 'admin',  # ou dynamique selon votre config
-                'password': container.get('password', '********'),
-                'status': 'active' if container.get('state') == 'running' else 'inactive',
-                'created_at': datetime.strptime(container.get('created', ''), '%Y-%m-%dT%H:%M:%SZ')
-                if container.get('created') else None
+                'username': container.get('username', 'root'),
+                'password': container.get('password', ''),
+                'ssh_port': container.get('ssh_port', 22),
+                'status': 'active',  # par défaut, ou ajouter la logique si disponible
+                'created_at': datetime.now()
             })
     except json.JSONDecodeError:
-        flash('Erreur lors de la récupération des ressources', 'danger')
-        instances = []
+        flash("Erreur lors de la récupération des ressources", "danger")
+    except Exception as e:
+        flash(f"Erreur inattendue : {e}", "danger")
 
     return render_template('my_resources.html', instances=instances)
