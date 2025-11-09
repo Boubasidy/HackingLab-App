@@ -20,7 +20,7 @@
         'id': item.container.Id,
         'ip_address': item.container.NetworkSettings.Networks.bridge.IPAddress,
         'ssh_port': (docker_base_port + ((item.container.Name | regex_replace('^/env_', '')) | int)),
-        'username': 'root',
+        'username': 'user1',
         'password': None,
         'owner': None,
         'reserved_until': None
