@@ -1,5 +1,5 @@
 ---
-# tasks/main.yml
+# tasks/main.yml — création du pool de conteneurs
 
 - name: Créer plusieurs conteneurs Docker
   community.docker.docker_container:
@@ -12,30 +12,22 @@
   loop: "{{ range(1, (nb_env | int) + 1) | list }}"
   register: containers
 
-# Récupérer les infos utiles : nom, IP, port exposé
-- name: Extraire les infos utiles des conteneurs créés
+# Construire la liste docker_infos au nouveau format
+- name: Construire la liste des conteneurs
   set_fact:
     docker_infos: "{{ docker_infos | default([]) + [ {
-        'name': item.container.Name,
+        'name': (item.container.Name | regex_replace('^/', '')),
+        'id': item.container.Id,
         'ip_address': item.container.NetworkSettings.Networks.bridge.IPAddress,
-        'ssh_port': docker_base_port + (item.container.Name | regex_replace('^env_', '') | int)
+        'ssh_port': (docker_base_port + ((item.container.Name | regex_replace('^/env_', '')) | int)),
+        'username': 'root',
+        'password': None,
+        'owner': None,
+        'reserved_until': None
       } ] }}"
   loop: "{{ containers.results }}"
-
-
-
-# Ajout d’un mot de passe SSH fixe pour les tests
-# (dans un vrai environnement, on génèrera ou échangera des clés SSH)
-- name: Ajouter mot de passe SSH aux infos
-  set_fact:
-    docker_infos: >-
-      {{
-        docker_infos | map('combine', {'username': 'root', 'password': 'vagrant'}) | list
-      }}
-
 
 - name: Sauvegarder les infos d'accès dans un JSON
   copy:
     dest: "{{ json_output_path }}"
     content: "{{ docker_infos | to_nice_json }}"
-

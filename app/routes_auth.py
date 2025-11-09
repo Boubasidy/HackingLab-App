@@ -3,6 +3,9 @@ from flask_login import login_user, logout_user, login_required, current_user
 from urllib.parse import urlparse
 from . forms import RegistrationForm, LoginForm, ResetPasswordForm
 from . models import User
+import json
+import subprocess
+
 from . import db, bcrypt
 
 
@@ -17,15 +20,63 @@ def register():
 
     form = RegistrationForm()
     if form.validate_on_submit():
-        # Créer un utilisateur
+        # 1) Vérifier la disponibilité des conteneurs
+        json_path = "/srv/infrastructure/ansible/environnements.json"
+
+        try:
+            with open(json_path, 'r') as f:
+                data = json.load(f)
+        except FileNotFoundError:
+            flash("Aucun environnement n'est encore disponible. Contactez l'admin.", "danger")
+            return render_template('registration.html', form=form)
+        except json.JSONDecodeError:
+            flash("Erreur de lecture du fichier d'environnements. Contactez l'admin.", "danger")
+            return render_template('registration.html', form=form)
+
+        # conteneurs libres = owner == None
+        free = [c for c in data if isinstance(c, dict) and c.get("owner") is None]
+        requested = form.requested_containers.data
+
+        if len(free) < requested:
+            flash(
+                f"Il n'y a que {len(free)} conteneur(s) disponible(s), "
+                f"vous en avez demandé {requested}.",
+                "danger",
+            )
+            return render_template('registration.html', form=form)
+
+        # 2) Créer l'utilisateur (DB)
         user = User(username=form.username.data, email=form.email.data)
         user.set_password(form.password.data)
         db.session.add(user)
         db.session.commit()
-        flash("Compte créé ! Connectez-vous.", "success")
+
+        # 3) Appeler Ansible pour assigner les conteneurs
+        try:
+            subprocess.run(
+                [
+                    "ansible-playbook",
+                    "-i", "/srv/infrastructure/ansible/inventories/hosts.ini",
+                    "/srv/infrastructure/ansible/playbooks/assign_containers.yml",
+                    "--extra-vars",
+                    # NB: on suppose que ssh_password ne contient pas d'espace (simple pour la V1)
+                    f"username={user.username} requested={requested} ssh_password={form.ssh_password.data}",
+                ],
+                check=True,
+            )
+            flash("Compte créé et conteneurs réservés ! Connectez-vous.", "success")
+        except subprocess.CalledProcessError:
+            # V1 simple : on ne rollback pas le user, juste un message
+            flash(
+                "Votre compte a été créé, mais une erreur est survenue lors de l'assignation "
+                "des conteneurs. Contactez l'admin.",
+                "warning",
+            )
+
         return redirect(url_for('auth.login'))
 
     return render_template('registration.html', form=form)
+
 
 
 @auth.route('/login', methods=['GET', 'POST'])

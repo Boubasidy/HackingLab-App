@@ -1,0 +1,57 @@
+---
+- name: Assigner des conteneurs à un utilisateur
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  become: yes
+
+  vars:
+    json_output_path: /srv/infrastructure/ansible/environnements.json
+
+  tasks:
+    - name: Lire le fichier environnements.json
+    # On suppose qu'il existe déjà (créé par deploy_docker.yml)
+      slurp:
+        src: "{{ json_output_path }}"
+      register: env_file
+
+    - name: Charger le JSON en structure Python
+      set_fact:
+        docker_infos: "{{ env_file.content | b64decode | from_json }}"
+
+    - name: Calculer la liste des conteneurs libres (owner == null)
+      set_fact:
+        free_containers: "{{ docker_infos | selectattr('owner', 'equalto', None) | list }}"
+
+    - name: Vérifier qu'il y a assez de conteneurs libres
+      fail:
+        msg: "Pas assez de conteneurs libres (disponibles={{ free_containers | length }}, demandés={{ requested | int }})"
+      when: (free_containers | length) < (requested | int)
+
+    - name: Sélectionner les noms des conteneurs à assigner
+      set_fact:
+        selected_names: "{{ (free_containers | map(attribute='name') | list)[: (requested | int)] }}"
+
+    - name: Initialiser la liste mise à jour
+      set_fact:
+        updated_docker_infos: []
+
+    - name: Mettre à jour owner/password pour les conteneurs sélectionnés
+      set_fact:
+        updated_docker_infos: "{{ updated_docker_infos + [ (
+          item
+          | combine({
+              'owner': (username if (item.name in selected_names) else item.owner),
+              'password': (ssh_password if (item.name in selected_names) else item.password)
+            })
+        ) ] }}"
+      loop: "{{ docker_infos }}"
+
+    - name: Sauvegarder les infos mises à jour dans le JSON
+      copy:
+        dest: "{{ json_output_path }}"
+        content: "{{ updated_docker_infos | to_nice_json }}"
+
+    - name: Afficher les conteneurs assignés
+      debug:
+        var: selected_names

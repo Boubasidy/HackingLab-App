@@ -27,14 +27,25 @@ def mes_ressources():
     from flask import flash, render_template
 
     json_path = "/srv/infrastructure/ansible/environnements.json"
-
     instances = []
 
     try:
         with open(json_path, 'r') as f:
             data = json.load(f)
 
+        username = current_user.username
+
         for container in data:
+            # support au cas où l'ancien format (liste de strings) traîne
+            if not isinstance(container, dict):
+                continue
+
+            owner = container.get('owner')
+
+            # On n'affiche QUE les conteneurs appartenant à l'utilisateur courant
+            if owner != username:
+                continue
+
             instances.append({
                 'name': container.get('name', 'N/A').lstrip('/'),
                 'ip_address': container.get('ip_address'),

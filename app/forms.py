@@ -31,13 +31,19 @@ class RegistrationForm(FlaskForm):
     )
 
     password = PasswordField(
-        "Mot de passe",
+        "Mot de passe (compte web)",
         validators=[DataRequired(), Length(min=6)],
     )
 
     confirm = PasswordField(
         "Confirmer le mot de passe",
         validators=[DataRequired(), EqualTo("password")],
+    )
+
+    # Mot de passe SSH pour les conteneurs
+    ssh_password = PasswordField(
+        "Mot de passe SSH pour vos conteneurs",
+        validators=[DataRequired(), Length(min=6)],
     )
 
     # --- Champs spécifiques au projet Docker ---
@@ -60,6 +66,7 @@ class RegistrationForm(FlaskForm):
     )
 
     submit = SubmitField("S'inscrire")
+
 
 
 # ===========================
