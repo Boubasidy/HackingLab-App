@@ -6,6 +6,7 @@ from . models import User
 import json
 import subprocess
 
+
 from . import db, bcrypt
 
 
@@ -19,39 +20,56 @@ def register():
         return redirect(url_for('main.home'))
 
     form = RegistrationForm()
+
+    # Lecture du JSON pour connaître les environnements disponibles
+    json_path = "/srv/infrastructure/ansible/environnements.json"
+    available_envs = None
+    data = []
+
+    try:
+        with open(json_path, 'r') as f:
+            data = json.load(f)
+
+        free_containers = [
+            c for c in data
+            if isinstance(c, dict) and c.get("owner") is None
+        ]
+        available_envs = len(free_containers)
+
+    except FileNotFoundError:
+        available_envs = 0
+        flash("Aucun environnement n'a encore été créé. Contactez l'administrateur.", "warning")
+    except json.JSONDecodeError:
+        available_envs = 0
+        flash("Erreur de lecture du fichier d'environnements. Contactez l'administrateur.", "danger")
+
     if form.validate_on_submit():
-        # 1) Vérifier la disponibilité des conteneurs
-        json_path = "/srv/infrastructure/ansible/environnements.json"
+        # petite contrainte V1 : pas d'espace dans le mot de passe SSH
+        if " " in form.ssh_password.data:
+            flash("Le mot de passe SSH ne doit pas contenir d'espaces pour cette version.", "danger")
+            return render_template('registration.html', form=form, available_envs=available_envs)
 
-        try:
-            with open(json_path, 'r') as f:
-                data = json.load(f)
-        except FileNotFoundError:
-            flash("Aucun environnement n'est encore disponible. Contactez l'admin.", "danger")
-            return render_template('registration.html', form=form)
-        except json.JSONDecodeError:
-            flash("Erreur de lecture du fichier d'environnements. Contactez l'admin.", "danger")
-            return render_template('registration.html', form=form)
+        if available_envs is None or available_envs <= 0:
+            flash("Aucun environnement n'est disponible pour le moment.", "danger")
+            return render_template('registration.html', form=form, available_envs=available_envs)
 
-        # conteneurs libres = owner == None
-        free = [c for c in data if isinstance(c, dict) and c.get("owner") is None]
         requested = form.requested_containers.data
 
-        if len(free) < requested:
+        if requested > available_envs:
             flash(
-                f"Il n'y a que {len(free)} conteneur(s) disponible(s), "
+                f"Il n'y a que {available_envs} environnement(s) disponible(s), "
                 f"vous en avez demandé {requested}.",
                 "danger",
             )
-            return render_template('registration.html', form=form)
+            return render_template('registration.html', form=form, available_envs=available_envs)
 
-        # 2) Créer l'utilisateur (DB)
+        # Création de l'utilisateur
         user = User(username=form.username.data, email=form.email.data)
         user.set_password(form.password.data)
         db.session.add(user)
         db.session.commit()
 
-        # 3) Appeler Ansible pour assigner les conteneurs
+        # Appel du playbook Ansible pour assigner les conteneurs
         try:
             subprocess.run(
                 [
@@ -59,23 +77,23 @@ def register():
                     "-i", "/srv/infrastructure/ansible/inventories/hosts.ini",
                     "/srv/infrastructure/ansible/playbooks/assign_containers.yml",
                     "--extra-vars",
-                    # NB: on suppose que ssh_password ne contient pas d'espace (simple pour la V1)
                     f"username={user.username} requested={requested} ssh_password={form.ssh_password.data}",
                 ],
                 check=True,
             )
-            flash("Compte créé et conteneurs réservés ! Connectez-vous.", "success")
+            flash("Compte créé et conteneur(s) réservé(s) ! Connectez-vous.", "success")
         except subprocess.CalledProcessError:
-            # V1 simple : on ne rollback pas le user, juste un message
             flash(
                 "Votre compte a été créé, mais une erreur est survenue lors de l'assignation "
-                "des conteneurs. Contactez l'admin.",
+                "des environnements. Contactez l'administrateur.",
                 "warning",
             )
 
         return redirect(url_for('auth.login'))
 
-    return render_template('registration.html', form=form)
+    # GET ou validation échouée
+    return render_template('registration.html', form=form, available_envs=available_envs)
+
 
 
 

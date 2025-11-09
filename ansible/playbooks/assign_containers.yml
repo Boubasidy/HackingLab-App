@@ -68,10 +68,6 @@
       set_fact:
         assigned_objects: "{{ updated_docker_infos | selectattr('name', 'in', selected_names) | list }}"
 
-    - name: Construire une liste d'objets des conteneurs assignés (avec username)
-      set_fact:
-        assigned_objects: "{{ updated_docker_infos | selectattr('name', 'in', selected_names) | list }}"
-
     - name: Appliquer le mot de passe SSH dans le conteneur
       vars:
         target_name: "{{ item.name }}"

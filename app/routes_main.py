@@ -36,7 +36,7 @@ def mes_ressources():
         username = current_user.username
 
         for container in data:
-            # support au cas où l'ancien format (liste de strings) traîne
+            # sécurité : ignorer les anciens formats éventuels
             if not isinstance(container, dict):
                 continue
 
@@ -48,19 +48,19 @@ def mes_ressources():
 
             instances.append({
                 'name': container.get('name', 'N/A').lstrip('/'),
-                'ip_address': container.get('ip_address'),
-                'username': container.get('username', 'root'),
+                'ip_address': container.get('ip_address', 'N/A'),
+                'username': container.get('username', 'user1'),
                 'password': container.get('password', ''),
                 'ssh_port': container.get('ssh_port', 22),
-                'status': 'active',
-                'created_at': datetime.now()
+                'created_at': datetime.now(),
             })
 
     except FileNotFoundError:
-        flash(f"Le fichier '{json_path}' n'existe pas. Exécute d'abord le playbook.", "warning")
+        flash(f"Le fichier '{json_path}' n'existe pas. Exécute d'abord le playbook de création.", "warning")
     except json.JSONDecodeError:
-        flash("Erreur lors de la lecture du fichier JSON.", "danger")
+        flash("Erreur lors de la lecture du fichier JSON d'environnements.", "danger")
     except Exception as e:
         flash(f"Erreur inattendue : {e}", "danger")
 
     return render_template('my_resources.html', instances=instances)
+

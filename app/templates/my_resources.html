@@ -1,5 +1,6 @@
-{% extends "base.html" %} {% block title %}Mes ressources{% endblock %} {% block
-content %}
+{% extends "base.html" %}
+{% block title %}Mes ressources{% endblock %}
+{% block content %}
 <div class="container">
   <h2 class="mb-4">Mes conteneurs</h2>
 
@@ -9,7 +10,8 @@ content %}
       <thead class="table-dark">
         <tr>
           <th>Nom</th>
-          <th>IP</th>
+          <th>IP Docker</th>
+          <th>Port SSH (hôte)</th>
           <th>Login</th>
           <th>Mot de passe</th>
           <th>Statut</th>
@@ -23,11 +25,16 @@ content %}
           <td>{{ inst.name }}</td>
           <td>
             {% if inst.ip_address %}
-            <a href="http://{{ inst.ip_address }}" target="_blank"
-              >{{ inst.ip_address }}</a
-            >
+              <span class="text-monospace">{{ inst.ip_address }}</span>
             {% else %}
-            <span class="text-muted">Non attribuée</span>
+              <span class="text-muted">Non attribuée</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if inst.ssh_port %}
+              <span class="text-monospace">127.0.0.1:{{ inst.ssh_port }}</span>
+            {% else %}
+              <span class="text-muted">N/A</span>
             {% endif %}
           </td>
           <td>{{ inst.username }}</td>
@@ -57,23 +64,26 @@ content %}
           </td>
           <td>
             {% if inst.status == 'active' %}
-            <span class="badge bg-success">Active</span>
+              <span class="badge bg-success">Active</span>
             {% else %}
-            <span class="badge bg-warning text-dark">{{ inst.status }}</span>
+              <span class="badge bg-warning text-dark">{{ inst.status }}</span>
             {% endif %}
           </td>
           <td>{{ inst.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
           <td class="text-end">
-            {% if inst.ip_address %}
-            <a
-              href="ssh://{{ inst.username }}@{{ inst.ip_address }}:{{ inst.ssh_port }}"
-              class="btn btn-sm btn-outline-primary me-1"
-              title="Se connecter (SSH)"
-            >
-              <i class="fa fa-terminal"></i>
-            </a>
+            {% if inst.ssh_port %}
+              <a
+                href="ssh://{{ inst.username }}@127.0.0.1:{{ inst.ssh_port }}"
+                class="btn btn-sm btn-outline-primary me-1"
+                title="Se connecter (SSH)"
+              >
+                <i class="fa fa-terminal"></i>
+              </a>
+              <small class="text-muted d-block mt-1">
+                ssh {{ inst.username }}@127.0.0.1 -p {{ inst.ssh_port }}
+              </small>
             {% endif %}
-            <a href="#" class="btn btn-sm btn-outline-info" title="Détails">
+            <a href="#" class="btn btn-sm btn-outline-info mt-1" title="Détails">
               <i class="fa fa-info-circle"></i>
             </a>
           </td>
@@ -88,7 +98,10 @@ content %}
   </div>
   {% endif %}
 </div>
-{% endblock %} {% block scripts %} {{ super() }}
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
 <script>
   document.addEventListener("click", function (e) {
     if (e.target.closest(".reveal-btn")) {
