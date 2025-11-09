@@ -1,5 +1,5 @@
 ---
-- name: Assigner des conteneurs à un utilisateur
+- name: Assigner des conteneurs à un utilisateur et appliquer le mot de passe
   hosts: localhost
   connection: local
   gather_facts: no
@@ -10,7 +10,6 @@
 
   tasks:
     - name: Lire le fichier environnements.json
-    # On suppose qu'il existe déjà (créé par deploy_docker.yml)
       slurp:
         src: "{{ json_output_path }}"
       register: env_file
@@ -47,11 +46,55 @@
         ) ] }}"
       loop: "{{ docker_infos }}"
 
-    - name: Sauvegarder les infos mises à jour dans le JSON
+    - name: Sauvegarder les infos mises à jour dans le JSON (atomique)
       copy:
-        dest: "{{ json_output_path }}"
+        dest: "{{ json_output_path }}.tmp"
         content: "{{ updated_docker_infos | to_nice_json }}"
+      run_once: true
+
+    - name: Déplacer le JSON temporaire en place
+      command: mv "{{ json_output_path }}.tmp" "{{ json_output_path }}"
+      run_once: true
 
     - name: Afficher les conteneurs assignés
       debug:
         var: selected_names
+
+    ##################################################
+    # --- Tâches pour appliquer le mot de passe SSH ---
+    ##################################################
+
+    - name: Construire une liste d'objets des conteneurs assignés (avec username)
+      set_fact:
+        assigned_objects: "{{ updated_docker_infos | selectattr('name', 'in', selected_names) | list }}"
+
+    - name: Appliquer le mot de passe et activer l'authentification par mot de passe
+      vars:
+        target_name: "{{ item.name }}"
+        target_user: "{{ item.username | default('root') }}"
+        target_pass: "{{ item.password | default(ssh_password) }}"
+      command: >
+        docker exec {{ target_name }} bash -lc
+        "set -e
+         # activer PasswordAuthentication et PermitRootLogin si présents/commentés
+         if grep -q '^#\\?PasswordAuthentication' /etc/ssh/sshd_config; then
+           sed -ri 's/^#?PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config || true
+         else
+           echo 'PasswordAuthentication yes' >> /etc/ssh/sshd_config
+         fi
+         if grep -q '^#\\?PermitRootLogin' /etc/ssh/sshd_config; then
+           sed -ri 's/^#?PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config || true
+         else
+           echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config
+         fi
+         # appliquer mot de passe
+         echo \"{{ target_user }}:{{ target_pass }}\" | chpasswd
+         # redémarrer ssh
+         if command -v service >/dev/null 2>&1; then service ssh restart || /etc/init.d/ssh restart || true; fi
+         exit 0"
+      loop: "{{ assigned_objects }}"
+      loop_control:
+        label: "{{ item.name }}"
+      register: apply_pass_results
+      changed_when: "'exit 0' in apply_pass_results.stdout or apply_pass_results.rc == 0"
+      failed_when: apply_pass_results.rc != 0 and apply_pass_results.rc is not none
