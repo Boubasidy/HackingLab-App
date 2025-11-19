@@ -1,0 +1,103 @@
+---
+# playbooks/reallocate_container.yml
+# Tâche incluse pour réallouer un conteneur à un owner
+
+# ÉTAPE 1 : Déterminer la liste de base à utiliser
+- name: "[REALLOC] Déterminer la liste de travail actuelle"
+  set_fact:
+    work_list: "{{ updated_docker_infos if (updated_docker_infos is defined and updated_docker_infos | length > 0) else docker_infos }}"
+
+# ÉTAPE 2 : LECTURE - Chercher un conteneur libre dans la liste de base
+- name: "[REALLOC] Trouver un conteneur de remplacement pour {{ dead_container.owner }}"
+  set_fact:
+    available_containers: >-
+      {{ work_list
+         | selectattr('owner', 'equalto', None)
+         | selectattr('name', 'ne', dead_container.name)
+         | list }}
+
+- name: "[REALLOC] Debug - Afficher les conteneurs disponibles"
+  debug:
+    msg: "Conteneurs libres trouvés : {{ available_containers | map(attribute='name') | list }}"
+
+- name: "[REALLOC] Vérifier qu'un conteneur est disponible"
+  fail:
+    msg: "ALERTE : Aucun conteneur libre pour réallouer {{ dead_container.owner }} !"
+  when: available_containers | length == 0
+  ignore_errors: yes
+
+- name: "[REALLOC] Sélectionner le premier conteneur libre"
+  set_fact:
+    replacement_container: "{{ available_containers[0] }}"
+  when: available_containers | length > 0
+
+- name: "[REALLOC] Debug - Conteneur de remplacement sélectionné"
+  debug:
+    msg: "Remplacement: {{ replacement_container.name }}"
+  when: available_containers | length > 0
+
+- name: "[REALLOC] Vérifier que le conteneur de remplacement est running"
+  community.docker.docker_container_info:
+    name: "{{ replacement_container.name }}"
+  register: replacement_check
+  when: available_containers | length > 0
+
+# ÉTAPE 3 : ÉCRITURE - Modifier la liste en assignant le conteneur
+- name: "[REALLOC] Initialiser la nouvelle liste"
+  set_fact:
+    new_updated_list: []
+  when:
+    - available_containers | length > 0
+    - replacement_check.container is defined
+    - replacement_check.container.State.Running
+
+- name: "[REALLOC] Construire la liste avec la réallocation"
+  set_fact:
+    new_updated_list: "{{ new_updated_list + [(item | combine({'owner': dead_container.owner, 'password': dead_container.password}) if item.name == replacement_container.name else item)] }}"
+  loop: "{{ work_list }}"
+  when:
+    - available_containers | length > 0
+    - replacement_check.container is defined
+    - replacement_check.container.State.Running
+
+- name: "[REALLOC] Sauvegarder la liste mise à jour"
+  set_fact:
+    updated_docker_infos: "{{ new_updated_list }}"
+  when:
+    - available_containers | length > 0
+    - replacement_check.container is defined
+    - replacement_check.container.State.Running
+
+- name: "[REALLOC] Debug - Vérifier la mise à jour"
+  debug:
+    msg: "Owner de {{ replacement_container.name }} : {{ (updated_docker_infos | selectattr('name', 'equalto', replacement_container.name) | first).owner }}"
+  when:
+    - available_containers | length > 0
+    - replacement_check.container is defined
+    - replacement_check.container.State.Running
+
+- name: "[REALLOC] Appliquer le mot de passe SSH sur le conteneur de remplacement"
+  command: >
+    docker exec {{ replacement_container.name }} bash -lc
+    "echo '{{ replacement_container.username }}:{{ dead_container.password }}' | chpasswd"
+  when:
+    - available_containers | length > 0
+    - replacement_check.container is defined
+    - replacement_check.container.State.Running
+    - dead_container.password is not none
+  ignore_errors: yes
+
+- name: "[REALLOC] Logger la réallocation"
+  lineinfile:
+    path: "{{ log_file }}"
+    line: "[{{ start_time }}] ✅ Réallocation : {{ dead_container.name }} (mort) → {{ replacement_container.name }} (nouveau) pour owner {{ dead_container.owner }}"
+  when:
+    - available_containers | length > 0
+    - replacement_check.container is defined
+    - replacement_check.container.State.Running
+
+- name: "[REALLOC] Logger l'échec si pas de conteneur dispo"
+  lineinfile:
+    path: "{{ log_file }}"
+    line: "[{{ start_time }}] ❌ ERREUR : Impossible de réallouer pour {{ dead_container.owner }} - Pas de conteneur libre"
+  when: available_containers | length == 0

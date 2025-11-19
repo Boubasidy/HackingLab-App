@@ -1,0 +1,72 @@
+---
+# playbooks/repair_container.yml
+# Tâche incluse pour tenter de réparer un conteneur
+- name: "[REPAIR] Tentative 1/3 - Redémarrer {{ container_to_repair.name }}"
+  community.docker.docker_container:
+    name: "{{ container_to_repair.name }}"
+    state: started
+  register: restart_attempt_1
+  ignore_errors: yes
+
+- name: "[REPAIR] Attendre 5 secondes"
+  pause:
+    seconds: "{{ restart_wait_time }}"
+  when: restart_attempt_1.failed
+
+- name: "[REPAIR] Vérifier après tentative 1"
+  community.docker.docker_container_info:
+    name: "{{ container_to_repair.name }}"
+  register: check_1
+  ignore_errors: yes
+  when: restart_attempt_1.failed
+
+- name: "[REPAIR] Tentative 2/3 - Redémarrer {{ container_to_repair.name }}"
+  community.docker.docker_container:
+    name: "{{ container_to_repair.name }}"
+    state: started
+  register: restart_attempt_2
+  ignore_errors: yes
+  when:
+    - restart_attempt_1.failed
+    - check_1.container is not defined or not check_1.container.State.Running
+
+- name: "[REPAIR] Attendre 5 secondes"
+  pause:
+    seconds: "{{ restart_wait_time }}"
+  when:
+    - restart_attempt_1.failed
+    - restart_attempt_2.failed is defined
+    - restart_attempt_2.failed
+
+- name: "[REPAIR] Vérifier après tentative 2"
+  community.docker.docker_container_info:
+    name: "{{ container_to_repair.name }}"
+  register: check_2
+  ignore_errors: yes
+  when:
+    - restart_attempt_1.failed
+    - restart_attempt_2.failed is defined
+
+- name: "[REPAIR] Tentative 3/3 - Redémarrer {{ container_to_repair.name }}"
+  community.docker.docker_container:
+    name: "{{ container_to_repair.name }}"
+    state: started
+  register: restart_attempt_3
+  ignore_errors: yes
+  when:
+    - restart_attempt_1.failed
+    - restart_attempt_2.failed is defined
+    - check_2.container is not defined or not check_2.container.State.Running
+
+- name: "[REPAIR] Attendre 5 secondes"
+  pause:
+    seconds: "{{ restart_wait_time }}"
+  when:
+    - restart_attempt_1.failed
+    - restart_attempt_3.failed is defined
+    - restart_attempt_3.failed
+
+- name: "[REPAIR] Logger le résultat"
+  lineinfile:
+    path: "{{ log_file }}"
+    line: "[{{ start_time }}] Réparation {{ container_to_repair.name }} : {% if restart_attempt_3.failed is defined and restart_attempt_3.failed %}ÉCHEC{% else %}SUCCÈS{% endif %}"

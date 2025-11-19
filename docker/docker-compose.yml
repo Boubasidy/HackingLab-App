@@ -12,24 +12,6 @@ services:
       - db_data:/var/lib/postgresql/data
     restart: always
 
-  docker-pool-1:
-    image: ubuntu:22.04
-    container_name: docker-pool-1
-    command: sleep infinity
-    restart: always
-
-  docker-pool-2:
-    image: ubuntu:22.04
-    container_name: docker-pool-2
-    command: sleep infinity
-    restart: always
-
-  docker-pool-3:
-    image: ubuntu:22.04
-    container_name: docker-pool-3
-    command: sleep infinity
-    restart: always
-
 volumes:
   db_data:
 

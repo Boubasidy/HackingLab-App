@@ -1,0 +1,401 @@
+---
+# playbooks/monitor_and_reallocate.yml
+# Surveillance et réallocation automatique des conteneurs
+- name: Surveillance et réallocation des conteneurs Docker
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  become: yes
+  vars:
+    json_output_path: /srv/infrastructure/ansible/environnements.json
+    log_file: /var/log/ansible-monitor.log
+    max_restart_attempts: 3
+    restart_wait_time: 5
+  
+  tasks:
+    # ========================================
+    # PHASE 1 : Initialisation
+    # ========================================
+    - name: "[INIT] Timestamp de début"
+      command: date '+%Y-%m-%d %H:%M:%S'
+      register: timestamp_cmd
+      changed_when: false
+    
+    - name: "[INIT] Définir le timestamp"
+      set_fact:
+        start_time: "{{ timestamp_cmd.stdout }}"
+    
+    - name: "[INIT] Logger le démarrage"
+      lineinfile:
+        path: "{{ log_file }}"
+        line: "\n=== [{{ start_time }}] Démarrage du monitoring ==="
+        create: yes
+      
+    - name: "[INIT] Lire le fichier environnements.json"
+      slurp:
+        src: "{{ json_output_path }}"
+      register: env_file
+    
+    - name: "[INIT] Charger le JSON"
+      set_fact:
+        docker_infos: "{{ env_file.content | b64decode | from_json }}"
+    
+    - name: "[INIT] Initialiser les listes de tracking"
+      set_fact:
+        containers_to_remove: []
+        reallocation_needed: []
+        updated_docker_infos: []
+        orphans_to_add: []
+    
+    # ========================================
+    # PHASE 1.5 : Gestion des conteneurs orphelins
+    # ========================================
+    - name: "[ORPHAN] Lister tous les conteneurs Docker env_* (tous statuts)"
+      shell: docker ps -a --filter "name=env_" --format "{%raw%}{{.Names}}{%endraw%}"
+      register: all_docker_containers_raw
+      changed_when: false
+      failed_when: false
+    
+    - name: "[ORPHAN] Convertir en liste"
+      set_fact:
+        all_env_containers: "{{ all_docker_containers_raw.stdout_lines | select('match', '^env_') | list }}"
+    
+    - name: "[ORPHAN] Identifier les conteneurs orphelins"
+      set_fact:
+        orphan_names: >-
+          {{ all_env_containers | difference(docker_infos | map(attribute='name') | list) }}
+    
+    - name: "[ORPHAN] Debug - Orphelins détectés"
+      debug:
+        msg: "Orphelins détectés : {{ orphan_names }}"
+      when: orphan_names | length > 0
+    
+    - name: "[ORPHAN] Logger les orphelins détectés"
+      lineinfile:
+        path: "{{ log_file }}"
+        line: "[{{ start_time }}] 🔍 Conteneurs orphelins détectés : {{ orphan_names }}"
+      when: orphan_names | length > 0
+    
+    - name: "[ORPHAN] Vérifier l'état de chaque orphelin"
+      community.docker.docker_container_info:
+        name: "{{ item }}"
+      register: orphan_states
+      loop: "{{ orphan_names }}"
+      when: orphan_names | length > 0
+    
+    - name: "[ORPHAN] Vérifier SSH dans les orphelins running"
+      shell: |
+        docker exec {{ item.item }} pgrep -x sshd >/dev/null 2>&1 && echo "OK" || echo "FAILED"
+      register: orphan_ssh_checks
+      loop: "{{ orphan_states.results | default([]) }}"
+      when:
+        - item.container is defined
+        - item.container.State.Running
+      ignore_errors: yes
+      changed_when: false
+    
+    - name: "[ORPHAN] Décider du sort de chaque orphelin"
+      block:
+        - name: "[ORPHAN] Initialiser les listes"
+          set_fact:
+            orphans_healthy: []
+            orphans_to_delete_list: []
+        
+        - name: "[ORPHAN] Identifier les orphelins running"
+          set_fact:
+            orphans_running: >-
+              {{ orphan_states.results | default([])
+                 | selectattr('container', 'defined')
+                 | selectattr('container.State.Running', 'equalto', true)
+                 | map(attribute='item')
+                 | list }}
+          when: orphan_states.results is defined
+        
+        - name: "[ORPHAN] Vérifier SSH pour chaque orphelin running"
+          set_fact:
+            orphans_healthy: >-
+              {{ orphans_healthy + [item.item.item] }}
+          loop: "{{ orphan_ssh_checks.results | default([]) }}"
+          when:
+            - item.stdout is defined
+            - "'OK' in item.stdout"
+        
+        - name: "[ORPHAN] Calculer les orphelins à supprimer"
+          set_fact:
+            orphans_to_delete: >-
+              {{ orphan_names | difference(orphans_healthy) }}
+      when: orphan_names | length > 0
+    
+    - name: "[ORPHAN] Debug - Résumé des orphelins"
+      debug:
+        msg:
+          - "Orphelins détectés: {{ orphan_names | default([]) }}"
+          - "Orphelins sains (à récupérer): {{ orphans_healthy | default([]) }}"
+          - "Orphelins à supprimer: {{ orphans_to_delete | default([]) }}"
+      when: orphan_names | default([]) | length > 0
+    
+    - name: "[ORPHAN] Récupérer les infos complètes des orphelins sains"
+      set_fact:
+        recovered_containers: >-
+          {{ recovered_containers | default([]) + [{
+            'id': item.container.Id,
+            'ip_address': item.container.NetworkSettings.Networks.bridge.IPAddress,
+            'name': item.container.Name | regex_replace('^/', ''),
+            'owner': None,
+            'password': None,
+            'reserved_until': None,
+            'ssh_port': (item.container.NetworkSettings.Ports['22/tcp'][0].HostPort | int),
+            'username': 'user1'
+          }] }}
+      loop: "{{ orphan_states.results | default([]) }}"
+      when:
+        - orphans_healthy | default([]) | length > 0
+        - item.container is defined
+        - item.item in orphans_healthy
+    
+    - name: "[ORPHAN] Ajouter les orphelins récupérés au JSON"
+      set_fact:
+        docker_infos: "{{ docker_infos + recovered_containers }}"
+      when: recovered_containers is defined and recovered_containers | length > 0
+    
+    - name: "[ORPHAN] Logger les récupérations"
+      lineinfile:
+        path: "{{ log_file }}"
+        line: "[{{ start_time }}] ♻️ Orphelins récupérés : {{ recovered_containers | map(attribute='name') | list }}"
+      when: recovered_containers is defined and recovered_containers | length > 0
+    
+    - name: "[ORPHAN] Supprimer les orphelins cassés"
+      community.docker.docker_container:
+        name: "{{ item }}"
+        state: absent
+      loop: "{{ orphans_to_delete }}"
+      when: orphans_to_delete is defined and orphans_to_delete | length > 0
+      ignore_errors: yes
+    
+    - name: "[ORPHAN] Logger les suppressions d'orphelins"
+      lineinfile:
+        path: "{{ log_file }}"
+        line: "[{{ start_time }}] 🗑️ Orphelins supprimés : {{ orphans_to_delete }}"
+      when: orphans_to_delete is defined and orphans_to_delete | length > 0
+    
+    # ========================================
+    # PHASE 2 : Vérification de chaque conteneur
+    # ========================================
+    - name: "[CHECK] Vérifier l'état de chaque conteneur"
+      community.docker.docker_container_info:
+        name: "{{ item.name }}"
+      register: container_states
+      loop: "{{ docker_infos }}"
+      ignore_errors: yes
+    
+    # ========================================
+    # PHASE 3 : Tentatives de réparation
+    # ========================================
+    - name: "[REPAIR] Tenter de redémarrer les conteneurs stopped/exited"
+      block:
+        - name: "[REPAIR] Identifier les conteneurs à réparer"
+          set_fact:
+            containers_needing_repair: >-
+              {{ container_states.results 
+                 | selectattr('container', 'defined')
+                 | selectattr('container', 'ne', None)
+                 | rejectattr('container.State.Running', 'equalto', true)
+                 | map(attribute='item') 
+                 | list }}
+        
+        - name: "[REPAIR] Logger les conteneurs à réparer"
+          lineinfile:
+            path: "{{ log_file }}"
+            line: "[{{ start_time }}] Conteneurs à réparer : {{ containers_needing_repair | map(attribute='name') | list }}"
+          when: containers_needing_repair | length > 0
+        
+        - name: "[REPAIR] Tentative de redémarrage (3 essais max)"
+          include_tasks: repair_container.yml
+          loop: "{{ containers_needing_repair }}"
+          loop_control:
+            loop_var: container_to_repair
+          when: containers_needing_repair | length > 0
+    
+    # ========================================
+    # PHASE 4 : Re-vérification après réparation
+    # ========================================
+    - name: "[VERIFY] Re-vérifier l'état de tous les conteneurs"
+      community.docker.docker_container_info:
+        name: "{{ item.name }}"
+      register: final_states
+      loop: "{{ docker_infos }}"
+      ignore_errors: yes
+    
+    # ========================================
+    # PHASE 5 : Identification des conteneurs morts
+    # ========================================
+    - name: "[DEAD] Identifier les conteneurs vraiment morts"
+      set_fact:
+        dead_containers: >-
+          {{ final_states.results 
+             | rejectattr('container', 'defined')
+             | map(attribute='item')
+             | list
+             + 
+             final_states.results
+             | selectattr('container', 'defined')
+             | selectattr('container', 'ne', None)
+             | rejectattr('container.State.Running', 'equalto', true)
+             | map(attribute='item')
+             | list
+             +
+             final_states.results
+             | selectattr('container', 'defined')
+             | selectattr('container', 'equalto', None)
+             | map(attribute='item')
+             | list }}
+    
+    - name: "[DEAD] Logger les conteneurs morts"
+      lineinfile:
+        path: "{{ log_file }}"
+        line: "[{{ start_time }}] Conteneurs MORTS détectés : {{ dead_containers | map(attribute='name') | list }}"
+      when: dead_containers | length > 0
+    
+    # ========================================
+    # PHASE 6 : Vérification SSH pour conteneurs running
+    # ========================================
+    - name: "[SSH] Vérifier que le processus sshd tourne dans chaque conteneur"
+      shell: |
+        docker exec {{ item.name }} pgrep -x sshd >/dev/null 2>&1 && echo "OK" || echo "FAILED"
+      register: ssh_process_checks
+      loop: "{{ docker_infos }}"
+      ignore_errors: yes
+      changed_when: false
+      when: 
+        - item.name not in (dead_containers | map(attribute='name') | list)
+    
+    - name: "[SSH] Vérifier la connectivité réseau SSH (timeout 3s)"
+      shell: |
+        timeout 3 bash -c "echo > /dev/tcp/localhost/{{ item.ssh_port }}" 2>/dev/null && echo "OK" || echo "FAILED"
+      register: ssh_network_checks
+      loop: "{{ docker_infos }}"
+      ignore_errors: yes
+      changed_when: false
+      when: 
+        - item.name not in (dead_containers | map(attribute='name') | list)
+    
+    - name: "[SSH] Debug - Résultats des vérifications SSH"
+      debug:
+        msg: "{{ item.item.name }}: Processus={{ ssh_process_checks.results[ansible_loop.index0].stdout | default('?') }} | Réseau={{ item.stdout | default('skipped') }}"
+      loop: "{{ ssh_network_checks.results | default([]) }}"
+      loop_control:
+        extended: yes
+      when: item.skipped is not defined
+    
+    - name: "[SSH] Ajouter conteneurs avec processus SSH mort"
+      set_fact:
+        dead_containers: >-
+          {{ dead_containers + [item.item] }}
+      loop: "{{ ssh_process_checks.results | default([]) }}"
+      when:
+        - item.skipped is not defined
+        - item.stdout is defined
+        - "'FAILED' in item.stdout"
+    
+    - name: "[SSH] Ajouter conteneurs avec SSH réseau inaccessible"
+      set_fact:
+        dead_containers: >-
+          {{ dead_containers + [item.item] }}
+      loop: "{{ ssh_network_checks.results | default([]) }}"
+      when:
+        - item.skipped is not defined
+        - item.stdout is defined
+        - "'FAILED' in item.stdout"
+        - item.item.name not in (dead_containers | map(attribute='name') | list)
+    
+    - name: "[SSH] Logger les conteneurs SSH inaccessibles"
+      lineinfile:
+        path: "{{ log_file }}"
+        line: "[{{ start_time }}] ⚠️ SSH mort détecté : {{ item.item.name }}"
+      loop: "{{ ssh_process_checks.results | default([]) + ssh_network_checks.results | default([]) }}"
+      when:
+        - item.skipped is not defined
+        - item.stdout is defined
+        - "'FAILED' in item.stdout"
+    
+    # ========================================
+    # PHASE 7 : Réallocation pour conteneurs avec owner
+    # ========================================
+    - name: "[REALLOC] Identifier les conteneurs morts avec owner"
+      set_fact:
+        dead_with_owner: >-
+          {{ dead_containers | selectattr('owner', 'ne', None) | list }}
+    
+    - name: "[REALLOC] Logger les réallocations nécessaires"
+      lineinfile:
+        path: "{{ log_file }}"
+        line: "[{{ start_time }}] Réallocation nécessaire pour : {{ dead_with_owner | map(attribute='name') | list }}"
+      when: dead_with_owner | length > 0
+    
+    - name: "[REALLOC] Trouver et assigner des conteneurs de remplacement"
+      include_tasks: reallocate_container.yml
+      loop: "{{ dead_with_owner }}"
+      loop_control:
+        loop_var: dead_container
+      when: dead_with_owner | length > 0
+    
+    # ========================================
+    # PHASE 8 : Nettoyage des conteneurs morts
+    # ========================================
+    - name: "[CLEANUP] Utiliser la liste avec réallocations si elle existe"
+      set_fact:
+        final_docker_infos: "{{ updated_docker_infos if (updated_docker_infos is defined and updated_docker_infos | length > 0) else docker_infos }}"
+    
+    - name: "[CLEANUP] Supprimer les conteneurs morts du JSON"
+      set_fact:
+        cleaned_docker_infos: >-
+          {{ final_docker_infos | rejectattr('name', 'in', dead_containers | map(attribute='name') | list) | list }}
+    
+    - name: "[CLEANUP] Supprimer physiquement les conteneurs Docker morts"
+      community.docker.docker_container:
+        name: "{{ item.name }}"
+        state: absent
+      loop: "{{ dead_containers }}"
+      ignore_errors: yes
+    
+    - name: "[CLEANUP] Logger les suppressions"
+      lineinfile:
+        path: "{{ log_file }}"
+        line: "[{{ start_time }}] Conteneurs supprimés : {{ dead_containers | map(attribute='name') | list }}"
+      when: dead_containers | length > 0
+    
+    # ========================================
+    # PHASE 9 : Sauvegarde du JSON mis à jour
+    # ========================================
+    - name: "[SAVE] Debug - Afficher le JSON final avant sauvegarde"
+      debug:
+        msg: "Conteneurs finaux : {{ cleaned_docker_infos | map(attribute='name') | list }}"
+    
+    - name: "[SAVE] Sauvegarder le JSON mis à jour (atomique)"
+      copy:
+        dest: "{{ json_output_path }}.tmp"
+        content: "{{ cleaned_docker_infos | to_nice_json }}"
+    
+    - name: "[SAVE] Déplacer le fichier temporaire"
+      command: mv "{{ json_output_path }}.tmp" "{{ json_output_path }}"
+    
+    # ========================================
+    # PHASE 10 : Rapport final
+    # ========================================
+    - name: "[REPORT] Générer le rapport final"
+      set_fact:
+        final_report:
+          timestamp: "{{ start_time }}"
+          total_containers: "{{ docker_infos | length }}"
+          dead_containers: "{{ dead_containers | length }}"
+          reallocations: "{{ dead_with_owner | length }}"
+          remaining_containers: "{{ cleaned_docker_infos | length }}"
+    
+    - name: "[REPORT] Logger le rapport"
+      lineinfile:
+        path: "{{ log_file }}"
+        line: "[{{ start_time }}] RAPPORT : Total={{ final_report.total_containers }} | Morts={{ final_report.dead_containers }} | Réallocations={{ final_report.reallocations }} | Restants={{ final_report.remaining_containers }}"
+    
+    - name: "[REPORT] Afficher le rapport"
+      debug:
+        var: final_report
