@@ -1,0 +1,25 @@
+- name: Ping containers depuis Bouba
+  hosts: localhost
+  gather_facts: no
+  vars:
+    resultat: []
+
+  tasks:
+    - name: Ping chaque container
+      command: "ping -c 4 {{ item }}"
+      loop:
+        - 172.20.0.5
+        - 172.20.0.6
+        - 172.20.0.4
+      register: ping_result
+      ignore_errors: yes
+
+    - name: Ajouter résultat
+      set_fact:
+        resultat: "{{ resultat + [ {'ip': item.item, 'reachable': (item.rc == 0), 'stdout': item.stdout} ] }}"
+      loop: "{{ ping_result.results }}"
+
+    - name: Sauvegarder JSON
+      copy:
+        dest: /home/Bouba/resultats_pings.json
+        content: "{{ resultat | to_nice_json }}"

@@ -1,0 +1,14 @@
+services:
+  client_bouba:
+    build: .
+    container_name: client_bouba
+    ports:
+      - "${SSH_PORT}:22"
+    networks:
+      - lab_net
+    restart: always
+
+networks:
+  lab_net:
+    external: true
+
