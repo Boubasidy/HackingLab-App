@@ -1,11 +1,20 @@
-- name: Ping containers depuis Bouba
+- name: Tests de connectivité et de charge contrôlée
   hosts: localhost
   gather_facts: no
   vars:
-    resultat: []
+    rapport:
+      timestamp: "{{ lookup('pipe', 'date -Iseconds') }}"
+      ping: []
+      charges:
+        cpu: {}
+        memory: {}
+        network: {}
 
   tasks:
-    - name: Ping chaque container
+    # -----------------------------
+    # TEST DE CONNECTIVITÉ
+    # -----------------------------
+    - name: Ping des conteneurs
       command: "ping -c 4 {{ item }}"
       loop:
         - 172.20.0.5
@@ -14,12 +23,108 @@
       register: ping_result
       ignore_errors: yes
 
-    - name: Ajouter résultat
+    - name: Enregistrer résultats ping
       set_fact:
-        resultat: "{{ resultat + [ {'ip': item.item, 'reachable': (item.rc == 0), 'stdout': item.stdout} ] }}"
+        rapport: >-
+          {{
+            rapport | combine({
+              'ping': rapport.ping + [
+                {
+                  'ip': item.item,
+                  'reachable': (item.rc == 0)
+                }
+              ]
+            }, recursive=True)
+          }}
       loop: "{{ ping_result.results }}"
 
-    - name: Sauvegarder JSON
+    # -----------------------------
+    # INSTALLATION DES OUTILS
+    # -----------------------------
+    - name: Installer stress-ng
+      apt:
+        name: stress-ng
+        state: present
+        update_cache: yes
+      become: yes
+
+    # -----------------------------
+    # CHARGE CPU
+    # -----------------------------
+    - name: Test de charge CPU
+      command: stress-ng --cpu 2 --timeout 20s --metrics-brief
+      register: cpu_test
+      ignore_errors: yes
+
+    - name: Enregistrer charge CPU
+      set_fact:
+        rapport: >-
+          {{
+            rapport | combine({
+              'charges': {
+                'cpu': {
+                  'workers': 2,
+                  'duration_seconds': 20,
+                  'success': (cpu_test.rc == 0)
+                }
+              }
+            }, recursive=True)
+          }}
+
+    # -----------------------------
+    # CHARGE MÉMOIRE
+    # -----------------------------
+    - name: Test de charge mémoire
+      command: stress-ng --vm 1 --vm-bytes 256M --timeout 20s --metrics-brief
+      register: mem_test
+      ignore_errors: yes
+
+    - name: Enregistrer charge mémoire
+      set_fact:
+        rapport: >-
+          {{
+            rapport | combine({
+              'charges': {
+                'memory': {
+                  'workers': 1,
+                  'memory_allocated': '256M',
+                  'duration_seconds': 20,
+                  'success': (mem_test.rc == 0)
+                }
+              }
+            }, recursive=True)
+          }}
+
+    # -----------------------------
+    # CHARGE RÉSEAU CONTRÔLÉE
+    # -----------------------------
+    - name: Test de charge réseau contrôlée (local)
+      command: stress-ng --sock 4 --timeout 20s --metrics-brief
+      register: net_test
+      ignore_errors: yes
+
+    - name: Enregistrer charge réseau
+      set_fact:
+        rapport: >-
+          {{
+            rapport | combine({
+              'charges': {
+                'network': {
+                  'type': 'trafic intensif contrôlé',
+                  'scope': 'local (Docker / localhost)',
+                  'connections_simulated': 4,
+                  'duration_seconds': 20,
+                  'success': (net_test.rc == 0)
+                }
+              }
+            }, recursive=True)
+          }}
+
+    # -----------------------------
+    # EXPORT JSON
+    # -----------------------------
+    - name: Sauvegarder le rapport JSON
       copy:
-        dest: /home/Bouba/resultats_pings.json
-        content: "{{ resultat | to_nice_json }}"
+        dest: /home/Bouba/rapport_tests.json
+        content: "{{ rapport | to_nice_json }}"
+
