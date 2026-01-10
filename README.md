@@ -3,6 +3,11 @@
 Ce projet vise à concevoir un outil capable de déployer automatiquement des environnements isolés, reproductibles et hautement disponibles. En s'appuyant sur une architecture robuste alliant Ansible, Docker et Flask, le système réduit les erreurs humaines et automatise l'intégralité du cycle de vie des ressources (provisionnement, monitoring et récupération en cas de panne).
 
 ## Organisation des Fichiers
+Organisation générale : 
+<img width="345" height="471" alt="image" src="https://github.com/user-attachments/assets/7ce80d6f-e037-49ac-a89b-12990353f4f4" />
+
+
+Organisation flask : 
 ```
 my-flask-app
 ├── app
