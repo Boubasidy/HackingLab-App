@@ -2,8 +2,19 @@
 
 Ce projet vise à concevoir un outil capable de déployer automatiquement des environnements isolés, reproductibles et hautement disponibles. En s'appuyant sur une architecture robuste alliant Ansible, Docker et Flask, le système réduit les erreurs humaines et automatise l'intégralité du cycle de vie des ressources (provisionnement, monitoring et récupération en cas de panne).
 
+## Architecture Générale
+
+L'infrastructure repose sur une machine virtuelle Ubuntu (provisionnée via Vagrant) servant de nœud de contrôle.
+Stack Technique :
+• Orchestration : Ansible (gestion de la configuration et cycle de vie).
+• Conteneurisation : Docker & Docker Compose (isolation des environnements utilisateurs).
+• Interface Web : Flask (API REST et tableau de bord utilisateur).
+• Automatisation : Cron (supervision périodique toutes les 5 minutes).
+
 ## Organisation des Fichiers
+
 Organisation générale : 
+
 <img width="345" height="471" alt="image" src="https://github.com/user-attachments/assets/7ce80d6f-e037-49ac-a89b-12990353f4f4" />
 
 
@@ -104,7 +115,11 @@ Pour maintenir l'infrastructure synchronisée avec le dépôt Git, nous utilison
    ```
    flask run --host=0.0.0.0 --port=5000
    ```
+## Évolutions Futures (Roadmap)
 
+• Persistance des données : Mise en place de volumes Docker pour éviter la perte de données lors des réallocations.
+• Pool Élastique : Création automatique de nouveaux conteneurs lorsque le pool de ressources libres devient critique.
+• Monitoring Avancé : Intégration de graphiques de performance et notifications (Slack/Email) en cas d'incident
 
 ## License
 
